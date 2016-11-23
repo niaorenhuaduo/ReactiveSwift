@@ -6,6 +6,10 @@
 //  Copyright (c) 2014 GitHub. All rights reserved.
 //
 
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+import MachO
+#endif
+
 /// Represents something that can be “disposed”, usually associated with freeing
 /// resources or canceling work.
 public protocol Disposable: class {
