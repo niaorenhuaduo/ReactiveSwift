@@ -192,7 +192,7 @@ public final class CompositeDisposable: Disposable {
 	public func dispose() {
 		if state.dispose() {
 			if let ds = disposables.swap(nil) {
-				for d in ds.reversed() {
+				ds.forEach { d in
 					d.dispose()
 				}
 			}

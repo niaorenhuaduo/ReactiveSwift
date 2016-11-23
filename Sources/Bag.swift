@@ -75,6 +75,18 @@ public struct Bag<Element> {
 			elements[i].token.identifier = currentIdentifier
 		}
 	}
+
+	/// Iterate through the elements.
+	///
+	/// - parameters:
+	///   - body: The action to be invoked for every element.
+	public func forEach(_ body: (Element) throws -> Void) rethrows {
+		try elements.withUnsafeBufferPointer { buffer in
+			for value in buffer {
+				try body(value.value)
+			}
+		}
+	}
 }
 
 extension Bag: Collection {
