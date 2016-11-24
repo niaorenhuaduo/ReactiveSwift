@@ -141,7 +141,7 @@ class SignalProducerSpec: QuickSpec {
 			}
 
 			it("should emit values then complete") {
-				let producer = SignalProducer<Int, TestError>(signal: signal)
+				let producer = SignalProducer<Int, TestError>(signal)
 
 				var values: [Int] = []
 				var error: TestError?
@@ -174,7 +174,7 @@ class SignalProducerSpec: QuickSpec {
 			}
 
 			it("should emit error") {
-				let producer = SignalProducer<Int, TestError>(signal: signal)
+				let producer = SignalProducer<Int, TestError>(signal)
 
 				var error: TestError?
 				let sentError = TestError.default
@@ -1774,7 +1774,7 @@ class SignalProducerSpec: QuickSpec {
 					forwardingScheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
 
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: forwardingScheduler))
+				let producer = SignalProducer(_signal.delay(0.1, on: forwardingScheduler))
 
 				let observingScheduler: QueueScheduler
 
@@ -1823,7 +1823,7 @@ class SignalProducerSpec: QuickSpec {
 					forwardingScheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
 
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: forwardingScheduler))
+				let producer = SignalProducer(_signal.delay(0.1, on: forwardingScheduler))
 
 				let observingScheduler: QueueScheduler
 
@@ -1875,7 +1875,7 @@ class SignalProducerSpec: QuickSpec {
 				} else {
 					scheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: scheduler))
+				let producer = SignalProducer(_signal.delay(0.1, on: scheduler))
 
 				var result: Result<Int, NoError>?
 
@@ -1928,7 +1928,7 @@ class SignalProducerSpec: QuickSpec {
 				} else {
 					scheduler = QueueScheduler(queue: DispatchQueue(label: "\(#file):\(#line)"))
 				}
-				let producer = SignalProducer(signal: _signal.delay(0.1, on: scheduler))
+				let producer = SignalProducer(_signal.delay(0.1, on: scheduler))
 
 				var result: Result<(), NoError>?
 
@@ -2356,7 +2356,7 @@ class SignalProducerSpec: QuickSpec {
 extension SignalProducer {
 	internal static func pipe() -> (SignalProducer, ProducedSignal.Observer) {
 		let (signal, observer) = ProducedSignal.pipe()
-		let producer = SignalProducer(signal: signal)
+		let producer = SignalProducer(signal)
 		return (producer, observer)
 	}
 

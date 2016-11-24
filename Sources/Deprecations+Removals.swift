@@ -294,6 +294,9 @@ extension SignalProducerProtocol where Error == NoError {
 extension SignalProducer {
 	@available(*, unavailable, message:"Use properties instead. `buffer(_:)` is removed in RAC 5.0.")
 	public static func buffer(_ capacity: Int) -> (SignalProducer, Signal<Value, Error>.Observer) { fatalError() }
+
+	@available(*, unavailable, renamed:"init(_:)")
+	public init<S: SignalProtocol>(signal: S) where S.Value == Value, S.Error == Error { fatalError() }
 }
 
 extension PropertyProtocol {

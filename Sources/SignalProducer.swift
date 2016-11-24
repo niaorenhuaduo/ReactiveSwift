@@ -29,7 +29,7 @@ public struct SignalProducer<Value, Error: Swift.Error> {
 	///
 	/// - parameters:
 	///   - signal: A signal to observe after starting the producer.
-	public init<S: SignalProtocol>(signal: S) where S.Value == Value, S.Error == Error {
+	public init<S: SignalProtocol>(_ signal: S) where S.Value == Value, S.Error == Error {
 		self.init { observer, disposable in
 			disposable += signal.observe(observer)
 		}
