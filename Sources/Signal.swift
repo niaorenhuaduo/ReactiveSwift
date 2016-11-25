@@ -54,7 +54,7 @@ public final class Signal<Value, Error: Swift.Error> {
 
 			func interrupt() {
 				if let state = signal.state.swap(nil) {
-					state.observers.forEach { observer in
+					for observer in state.observers {
 						observer.sendInterrupted()
 					}
 				}
@@ -80,7 +80,7 @@ public final class Signal<Value, Error: Swift.Error> {
 				if let state = (event.isTerminating ? signal.state.swap(nil) : signal.state.value) {
 					sendLock.lock()
 
-					state.observers.forEach { observer in
+					for observer in state.observers {
 						observer.action(event)
 					}
 
