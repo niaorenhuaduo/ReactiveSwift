@@ -40,16 +40,14 @@ internal struct UnsafeAtomicState<State: RawRepresentable>: AtomicStateProtocol 
 	/// - parameters:
 	///   - initial: The desired initial state.
 	internal init(_ initial: State) {
-		let raw = UnsafeMutableRawPointer.allocate(bytes: MemoryLayout<Int32>.size,
-		                                           alignedTo: MemoryLayout<Int32>.alignment)
-		value = raw.assumingMemoryBound(to: Int32.self)
+		value = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
 		value.initialize(to: initial.rawValue)
 	}
 
 	/// Deinitialize the finite state machine.
 	internal func deinitialize() {
-		UnsafeMutableRawPointer(value).deallocate(bytes: MemoryLayout<Int32>.size,
-		                                          alignedTo: MemoryLayout<Int32>.alignment)
+		value.deinitialize()
+		value.deallocate(capacity: 1)
 	}
 
 	/// Compare the current state with the specified state.
