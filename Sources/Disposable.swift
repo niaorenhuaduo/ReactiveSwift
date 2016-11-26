@@ -114,17 +114,20 @@ public final class CompositeDisposable: Disposable {
 	/// Represents a handle to a disposable previously added to a
 	/// CompositeDisposable.
 	public final class DisposableHandle {
-		private let bagToken: Atomic<RemovalToken?>
+		private var state: UnsafeAtomicState<DisposableState>
+		private var bagToken: RemovalToken?
 		private weak var disposable: CompositeDisposable?
 
 		fileprivate static let empty = DisposableHandle()
 
 		fileprivate init() {
-			self.bagToken = Atomic(nil)
+			self.state = UnsafeAtomicState(.disposed)
+			self.bagToken = nil
 		}
 
 		fileprivate init(bagToken: RemovalToken, disposable: CompositeDisposable) {
-			self.bagToken = Atomic(bagToken)
+			self.state = UnsafeAtomicState(.active)
+			self.bagToken = bagToken
 			self.disposable = disposable
 		}
 
@@ -133,10 +136,12 @@ public final class CompositeDisposable: Disposable {
 		/// - note: This is useful to minimize memory growth, by removing
 		///         disposables that are no longer needed.
 		public func remove() {
-			if let token = bagToken.swap(nil) {
+			if state.tryDispose(), let token = bagToken {
 				_ = disposable?.disposables.modify {
 					$0?.remove(using: token)
 				}
+				bagToken = nil
+				disposable = nil
 			}
 		}
 	}
