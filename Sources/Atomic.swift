@@ -12,10 +12,8 @@ internal struct _PosixThreadMutex {
 	private let mutex: UnsafeMutablePointer<pthread_mutex_t>
 
 	init() {
-		mutex = UnsafeMutableRawPointer.allocate(bytes: MemoryLayout<pthread_mutex_t>.size,
-		                                         alignedTo: MemoryLayout<pthread_mutex_t>.alignment)
-		.assumingMemoryBound(to: pthread_mutex_t.self)
-
+		mutex = UnsafeMutablePointer<pthread_mutex_t>.allocate(capacity: 1)
+		mutex.initialize(to: pthread_mutex_t())
 		let result = pthread_mutex_init(mutex, nil)
 		precondition(result == 0, "Failed to initialize mutex with error \(result).")
 	}
@@ -23,9 +21,8 @@ internal struct _PosixThreadMutex {
 	func deinitialize() {
 		let result = pthread_mutex_destroy(mutex)
 		precondition(result == 0, "Failed to destroy mutex with error \(result).")
-
-		UnsafeMutableRawPointer(mutex).deallocate(bytes: MemoryLayout<pthread_mutex_t>.size,
-		                                          alignedTo: MemoryLayout<pthread_mutex_t>.alignment)
+		mutex.deinitialize()
+		mutex.deallocate(capacity: 1)
 	}
 
 	@inline(__always)
