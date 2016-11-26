@@ -7,6 +7,111 @@
 //
 
 import Foundation
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+import MachO
+#endif
+
+/// Represents a finite state machine that can transit from one state to
+/// another.
+internal protocol AtomicStateProtocol {
+	associatedtype State: RawRepresentable
+
+	/// Try to transit from the expected current state to the specified next
+	/// state.
+	///
+	/// - parameters:
+	///   - expected: The expected state.
+	///
+	/// - returns:
+	///   `true` if the transition succeeds. `false` otherwise.
+	mutating func tryTransiting(from expected: State, to next: State) -> Bool
+}
+
+/// A simple, generic lock-free finite state machine.
+internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where State.RawValue == Int32 {
+	internal typealias Transition = (expected: State, next: State)
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+	private var value: Int32
+
+	/// Create a finite state machine with the specified initial state.
+	///
+	/// - parameters:
+	///   - initial: The desired initial state.
+	internal init(_ initial: State) {
+		value = initial.rawValue
+	}
+
+	/// Compare the current state with the specified state.
+	///
+	/// - parameters:
+	///   - expected: The expected state.
+	///
+	/// - returns:
+	///   `true` if the current state matches the expected state. `false`
+	///   otherwise.
+	@inline(__always)
+	internal mutating func `is`(_ expected: State) -> Bool {
+		return OSAtomicCompareAndSwap32Barrier(expected.rawValue,
+		                                       expected.rawValue,
+		                                       &value)
+	}
+
+	/// Try to transit from the expected current state to the specified next
+	/// state.
+	///
+	/// - parameters:
+	///   - expected: The expected state.
+	///
+	/// - returns:
+	///   `true` if the transition succeeds. `false` otherwise.
+	@inline(__always)
+	internal mutating func tryTransiting(from expected: State, to next: State) -> Bool {
+		return OSAtomicCompareAndSwap32Barrier(expected.rawValue,
+		                                       next.rawValue,
+		                                       &value)
+	}
+#else
+	private let value: Atomic<Int32>
+
+	/// Create a finite state machine with the specified initial state.
+	///
+	/// - parameters:
+	///   - initial: The desired initial state.
+	internal init(_ initial: State) {
+		value = Atomic(initial.rawValue)
+	}
+
+	/// Compare the current state with the specified state.
+	///
+	/// - parameters:
+	///   - expected: The expected state.
+	///
+	/// - returns:
+	///   `true` if the current state matches the expected state. `false`
+	///   otherwise.
+	internal mutating func `is`(_ expected: State) -> Bool {
+		return value.modify { $0 == expected.rawValue }
+	}
+
+	/// Try to transit from the expected current state to the specified next
+	/// state.
+	///
+	/// - parameters:
+	///   - expected: The expected state.
+	///
+	/// - returns:
+	///   `true` if the transition succeeds. `false` otherwise.
+	internal mutating func tryTransiting(from expected: State, to next: State) -> Bool {
+		return value.modify { value in
+			if value == expected.rawValue {
+				value = next.rawValue
+				return true
+			}
+			return false
+		}
+	}
+	#endif
+}
 
 final class PosixThreadMutex: NSLocking {
 	private var mutex = pthread_mutex_t()

@@ -6,10 +6,6 @@
 //  Copyright (c) 2014 GitHub. All rights reserved.
 //
 
-#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-import MachO
-#endif
-
 /// Represents something that can be “disposed”, usually associated with freeing
 /// resources or canceling work.
 public protocol Disposable: class {
@@ -23,40 +19,24 @@ public protocol Disposable: class {
 	func dispose()
 }
 
-private struct DisposableState {
-#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-	private var _isDisposed: Int32
+/// Represents the state of a disposable.
+private enum DisposableState: Int32 {
+	/// The disposable is active.
+	case active
 
-	fileprivate var isDisposed: Bool {
-		mutating get {
-			return OSAtomicCompareAndSwap32(1, 1, &_isDisposed)
-		}
-	}
+	/// The disposable has been disposed.
+	case disposed
+}
 
-	fileprivate init() {
-		_isDisposed = 0
+extension AtomicStateProtocol where State == DisposableState {
+	/// Try to transit from `active` to `disposed`.
+	///
+	/// - returns:
+	///   `true` if the transition succeeds. `false` otherwise.
+	@inline(__always)
+	fileprivate mutating func tryDispose() -> Bool {
+		return tryTransiting(from: .active, to: .disposed)
 	}
-
-	fileprivate mutating func dispose() -> Bool {
-		return OSAtomicCompareAndSwap32Barrier(0, 1, &_isDisposed)
-	}
-#else
-	private let _isDisposed: Atomic<Bool>
-
-	fileprivate var isDisposed: Bool {
-		mutating get {
-			return _isDisposed.value
-		}
-	}
-
-	fileprivate init() {
-		_isDisposed = Atomic(false)
-	}
-
-	fileprivate mutating func dispose() -> Bool {
-		return !_isDisposed.swap(true)
-	}
-#endif
 }
 
 /// A type-erased disposable that forwards operations to an underlying disposable.
@@ -79,26 +59,26 @@ public final class AnyDisposable: Disposable {
 /// A disposable that only flips `isDisposed` upon disposal, and performs no other
 /// work.
 public final class SimpleDisposable: Disposable {
-	private var state = DisposableState()
+	private var state = AtomicState<DisposableState>(.active)
 
 	public var isDisposed: Bool {
-		return state.isDisposed
+		return state.is(.disposed)
 	}
 
 	public init() {}
 
 	public func dispose() {
-		_ = state.dispose()
+		_ = state.tryDispose()
 	}
 }
 
 /// A disposable that will run an action upon disposal.
 public final class ActionDisposable: Disposable {
 	private var action: (() -> Void)?
-	private var state: DisposableState
+	private var state: AtomicState<DisposableState>
 
 	public var isDisposed: Bool {
-		return state.isDisposed
+		return state.is(.disposed)
 	}
 
 	/// Initialize the disposable to run the given action upon disposal.
@@ -107,11 +87,11 @@ public final class ActionDisposable: Disposable {
 	///   - action: A closure to run when calling `dispose()`.
 	public init(action: @escaping () -> Void) {
 		self.action = action
-		self.state = DisposableState()
+		self.state = AtomicState<DisposableState>(.active)
 	}
 
 	public func dispose() {
-		if state.dispose() {
+		if state.tryDispose() {
 			action?()
 			action = nil
 		}
@@ -121,7 +101,7 @@ public final class ActionDisposable: Disposable {
 /// A disposable that will dispose of any number of other disposables.
 public final class CompositeDisposable: Disposable {
 	private let disposables: Atomic<Bag<Disposable>?>
-	private var state: DisposableState
+	private var state: AtomicState<DisposableState>
 
 	/// Represents a handle to a disposable previously added to a
 	/// CompositeDisposable.
@@ -154,7 +134,7 @@ public final class CompositeDisposable: Disposable {
 	}
 
 	public var isDisposed: Bool {
-		return state.isDisposed
+		return state.is(.disposed)
 	}
 
 	/// Initialize a `CompositeDisposable` containing the given sequence of
@@ -173,7 +153,7 @@ public final class CompositeDisposable: Disposable {
 		}
 
 		self.disposables = Atomic(bag)
-		self.state = DisposableState()
+		self.state = AtomicState<DisposableState>(.active)
 	}
 	
 	/// Initialize a `CompositeDisposable` containing the given sequence of
@@ -194,7 +174,7 @@ public final class CompositeDisposable: Disposable {
 	}
 
 	public func dispose() {
-		if state.dispose() {
+		if state.tryDispose() {
 			if let ds = disposables.swap(nil) {
 				for d in ds.reversed() {
 					d.dispose()
@@ -286,10 +266,10 @@ extension ScopedDisposable where InnerDisposable: AnyDisposable {
 /// A disposable that will optionally dispose of another disposable.
 public final class SerialDisposable: Disposable {
 	private let _innerDisposable: Atomic<Disposable?>
-	private var state: DisposableState
+	private var state: AtomicState<DisposableState>
 
 	public var isDisposed: Bool {
-		return state.isDisposed
+		return state.is(.disposed)
 	}
 
 	/// The inner disposable to dispose of.
@@ -316,11 +296,11 @@ public final class SerialDisposable: Disposable {
 	///   - disposable: Optional disposable.
 	public init(_ disposable: Disposable? = nil) {
 		self._innerDisposable = Atomic(disposable)
-		self.state = DisposableState()
+		self.state = AtomicState<DisposableState>(.active)
 	}
 
 	public func dispose() {
-		if state.dispose() {
+		if state.tryDispose() {
 			_innerDisposable.swap(nil)?.dispose()
 		}
 	}
