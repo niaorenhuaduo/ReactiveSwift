@@ -110,7 +110,7 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 			return false
 		}
 	}
-	#endif
+#endif
 }
 
 final class PosixThreadMutex: NSLocking {
