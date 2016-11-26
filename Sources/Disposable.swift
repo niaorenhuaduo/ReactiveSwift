@@ -59,7 +59,7 @@ public final class AnyDisposable: Disposable {
 /// A disposable that only flips `isDisposed` upon disposal, and performs no other
 /// work.
 public final class SimpleDisposable: Disposable {
-	private var state = AtomicState<DisposableState>(.active)
+	private var state = UnsafeAtomicState(DisposableState.active)
 
 	public var isDisposed: Bool {
 		return state.is(.disposed)
@@ -70,12 +70,16 @@ public final class SimpleDisposable: Disposable {
 	public func dispose() {
 		_ = state.tryDispose()
 	}
+
+	deinit {
+		state.deinitialize()
+	}
 }
 
 /// A disposable that will run an action upon disposal.
 public final class ActionDisposable: Disposable {
 	private var action: (() -> Void)?
-	private var state: AtomicState<DisposableState>
+	private var state: UnsafeAtomicState<DisposableState>
 
 	public var isDisposed: Bool {
 		return state.is(.disposed)
@@ -87,7 +91,7 @@ public final class ActionDisposable: Disposable {
 	///   - action: A closure to run when calling `dispose()`.
 	public init(action: @escaping () -> Void) {
 		self.action = action
-		self.state = AtomicState<DisposableState>(.active)
+		self.state = UnsafeAtomicState(DisposableState.active)
 	}
 
 	public func dispose() {
@@ -96,12 +100,16 @@ public final class ActionDisposable: Disposable {
 			action = nil
 		}
 	}
+
+	deinit {
+		state.deinitialize()
+	}
 }
 
 /// A disposable that will dispose of any number of other disposables.
 public final class CompositeDisposable: Disposable {
 	private let disposables: Atomic<Bag<Disposable>?>
-	private var state: AtomicState<DisposableState>
+	private var state: UnsafeAtomicState<DisposableState>
 
 	/// Represents a handle to a disposable previously added to a
 	/// CompositeDisposable.
@@ -153,7 +161,7 @@ public final class CompositeDisposable: Disposable {
 		}
 
 		self.disposables = Atomic(bag)
-		self.state = AtomicState<DisposableState>(.active)
+		self.state = UnsafeAtomicState(DisposableState.active)
 	}
 	
 	/// Initialize a `CompositeDisposable` containing the given sequence of
@@ -220,6 +228,10 @@ public final class CompositeDisposable: Disposable {
 	public func add(_ action: @escaping () -> Void) -> DisposableHandle {
 		return add(ActionDisposable(action: action))
 	}
+
+	deinit {
+		state.deinitialize()
+	}
 }
 
 /// A disposable that, upon deinitialization, will automatically dispose of
@@ -266,7 +278,7 @@ extension ScopedDisposable where InnerDisposable: AnyDisposable {
 /// A disposable that will optionally dispose of another disposable.
 public final class SerialDisposable: Disposable {
 	private let _innerDisposable: Atomic<Disposable?>
-	private var state: AtomicState<DisposableState>
+	private var state: UnsafeAtomicState<DisposableState>
 
 	public var isDisposed: Bool {
 		return state.is(.disposed)
@@ -296,13 +308,17 @@ public final class SerialDisposable: Disposable {
 	///   - disposable: Optional disposable.
 	public init(_ disposable: Disposable? = nil) {
 		self._innerDisposable = Atomic(disposable)
-		self.state = AtomicState<DisposableState>(.active)
+		self.state = UnsafeAtomicState(DisposableState.active)
 	}
 
 	public func dispose() {
 		if state.tryDispose() {
 			_innerDisposable.swap(nil)?.dispose()
 		}
+	}
+
+	deinit {
+		state.deinitialize()
 	}
 }
 

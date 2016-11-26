@@ -28,17 +28,28 @@ internal protocol AtomicStateProtocol {
 }
 
 /// A simple, generic lock-free finite state machine.
-internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where State.RawValue == Int32 {
+///
+/// - warning: `deinitialize` must be called to dispose of the consumed memory.
+internal struct UnsafeAtomicState<State: RawRepresentable>: AtomicStateProtocol where State.RawValue == Int32 {
 	internal typealias Transition = (expected: State, next: State)
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-	private var value: Int32
+	private let value: UnsafeMutablePointer<Int32>
 
 	/// Create a finite state machine with the specified initial state.
 	///
 	/// - parameters:
 	///   - initial: The desired initial state.
 	internal init(_ initial: State) {
-		value = initial.rawValue
+		let raw = UnsafeMutableRawPointer.allocate(bytes: MemoryLayout<Int32>.size,
+		                                           alignedTo: MemoryLayout<Int32>.alignment)
+		value = raw.assumingMemoryBound(to: Int32.self)
+		value.initialize(to: initial.rawValue)
+	}
+
+	/// Deinitialize the finite state machine.
+	internal func deinitialize() {
+		UnsafeMutableRawPointer(value).deallocate(bytes: MemoryLayout<Int32>.size,
+		                                          alignedTo: MemoryLayout<Int32>.alignment)
 	}
 
 	/// Compare the current state with the specified state.
@@ -50,10 +61,10 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 	///   `true` if the current state matches the expected state. `false`
 	///   otherwise.
 	@inline(__always)
-	internal mutating func `is`(_ expected: State) -> Bool {
+	internal func `is`(_ expected: State) -> Bool {
 		return OSAtomicCompareAndSwap32Barrier(expected.rawValue,
 		                                       expected.rawValue,
-		                                       &value)
+		                                       value)
 	}
 
 	/// Try to transit from the expected current state to the specified next
@@ -65,10 +76,10 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 	/// - returns:
 	///   `true` if the transition succeeds. `false` otherwise.
 	@inline(__always)
-	internal mutating func tryTransiting(from expected: State, to next: State) -> Bool {
+	internal func tryTransiting(from expected: State, to next: State) -> Bool {
 		return OSAtomicCompareAndSwap32Barrier(expected.rawValue,
 		                                       next.rawValue,
-		                                       &value)
+		                                       value)
 	}
 #else
 	private let value: Atomic<Int32>
@@ -81,6 +92,9 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 		value = Atomic(initial.rawValue)
 	}
 
+	/// Deinitialize the finite state machine.
+	internal func deinitialize() {}
+
 	/// Compare the current state with the specified state.
 	///
 	/// - parameters:
@@ -89,7 +103,7 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 	/// - returns:
 	///   `true` if the current state matches the expected state. `false`
 	///   otherwise.
-	internal mutating func `is`(_ expected: State) -> Bool {
+	internal func `is`(_ expected: State) -> Bool {
 		return value.modify { $0 == expected.rawValue }
 	}
 
@@ -101,7 +115,7 @@ internal struct AtomicState<State: RawRepresentable>: AtomicStateProtocol where 
 	///
 	/// - returns:
 	///   `true` if the transition succeeds. `false` otherwise.
-	internal mutating func tryTransiting(from expected: State, to next: State) -> Bool {
+	internal func tryTransiting(from expected: State, to next: State) -> Bool {
 		return value.modify { value in
 			if value == expected.rawValue {
 				value = next.rawValue
